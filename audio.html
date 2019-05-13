@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        .audio-wrapper {
+            width: 600px;
+            margin: 15vh auto;
+        }
+
+        .audio {
+            display: flex;
+            height: 60px;
+            line-height: 40px;
+            width: 300px;
+            padding: 10px;
+            border-radius: 30px;
+            background-color: rgb(211, 225, 247);
+        }
+
+        .audio_left {
+            flex: 0 0 40px;
+            border-radius: 50%;
+            background-color: #000;
+            cursor: pointer;
+        }
+
+        .audio_center {
+            flex: 1;
+            margin: 0 20px 0 10px;
+        }
+
+        .audio_right {
+            flex: 0 0 60px;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        #trumpet {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="audio-wrapper">
+        <audio id="audio">
+            <source src="./assets/song.ogg" type="audio/ogg">
+        </audio>
+        <div class="audio">
+            <div class="audio_left" id="playBtn">
+                <canvas id="trumpet">
+
+                </canvas>
+            </div>
+            <div class="audio_center">
+                <canvas id="canvas"></canvas>
+            </div>
+            <div class="audio_right">
+                <span id="curtime"></span>
+                <span id="duration"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function () {
+
+            const AUDIO = { // const 声明的变量不会进行提升.
+                renderLine: params => { // 渲染声浪
+                    params.el.height = params.el.clientHeight
+
+                    var context = params.el.getContext('2d')
+                    var lineArray = []
+                    context.strokeStyle = params.color
+                    context.lineWidth = params.lineWidth
+                    context.lineJoin = 'round'
+
+
+                    params.lineArray.forEach((v, i) => {
+                        context.beginPath()
+                        context.moveTo(v.startX, v.startY)
+                        context.lineTo(v.endX, v.endY)
+                        context.stroke();
+                        context.closePath()
+                    })
+                },
+
+                renderTrumpet: params => { // 渲染喇叭
+                    var context = params.el.getContext('2d')
+                    context.strokeStyle = params.color
+                    context.fillStyle = params.color
+                    context.lineWidth = params.circles.lineWidth
+
+
+                    context.beginPath()
+                    context.arc(params.circles.x, params.circles.y, params.circles.raduis[0], 0, 2 * Math
+                        .PI)
+                    context.fill()
+                    context.closePath()
+
+                    params.circles.raduis.forEach((v, i) => {
+                        if (i > 0) {
+                            context.beginPath()
+                            context.arc(params.circles.x, params.circles.y, v, -0.3 * Math.PI, 0.3 *
+                                Math
+                                .PI)
+                            context.stroke()
+                            context.closePath()
+                        }
+                    })
+                },
+
+                fill_location: params => { // 初始化每条线的 x,y 位置
+                    params.lineArray[0].startX = (params.boxWidth / params.count) / 2 - params.lineWidth / 2
+                    params.lineArray[0].endX = (params.boxWidth / params.count) / 2 - params.lineWidth / 2
+                    const grap = params.boxWidth / params.count - params.lineWidth // 每条线的间隔
+                    
+
+                    params.lineArray.forEach((v,i)=>{
+                        if(i>=1) {
+                            params.lineArray[i].startX = params.lineArray[i-1].startX + params.lineWidth + grap
+                            params.lineArray[i].endX = params.lineArray[i-1].endX + params.lineWidth + grap
+                        }
+                    })
+                    console.log(lineArray)
+                     params.lineArray.forEach((v, i) => { // 初始化 y 坐标
+                        v.startY = (params.boxHeight - v.height) / 2
+                        v.endY = params.boxHeight - (params.boxHeight - v.height) / 2
+                    })
+                    return lineArray
+                },
+
+                action: params => { // 计算高度
+                    debugger
+
+                    params.lineArray.forEach((v, i) => {
+                        v.height >= 20 && v.speed > 0 ? params.lineArray[i].speed = -v.speed : params.lineArray[i].speed = v.speed
+                        v.height <= 5 && v.speed < 0 ? params.lineArray[i].speed = -v.speed : params.lineArray[i].speed = v.speed
+                        params.lineArray[i].height = v.speed + v.height
+                    })
+                    
+                    return  params.lineArray
+                },
+                formaTime: time => { // 格式化时间为 mm:ss
+                    var minutes = Math.floor(Math.ceil(time) / 60) >= 10 ? Math.floor(Math.ceil(time) /
+                        60) : '0' + Math.floor(Math.ceil(time) / 60)
+                    var second = Math.floor(Math.ceil(time) % 60) >= 10 ? Math.floor(Math.ceil(time) % 60) :
+                        '0' + Math.floor(Math.ceil(time) % 60)
+                    return `${ minutes }:${ second }`
+                },
+            }
+
+
+
+            var playBtn = document.getElementById('playBtn') // 控制按钮
+            var audio = document.getElementById('audio') // 音频
+
+            var duration = document.getElementById('duration') // 音频时长
+            var curtime = document.getElementById('curtime')
+            var timer = 0
+
+
+            var lines = document.getElementById('canvas')
+            var trumpet = document.getElementById('trumpet')
+            const LINES_HEIGHT = document.getElementsByClassName('audio_center')[0].clientHeight
+            const LINES_WIDTH = document.getElementsByClassName('audio_center')[0].clientWidth
+            const TRUMPET_HEIGHT = document.getElementsByClassName('audio_left')[0].clientHeight
+            const TRUMPET_WIDTH = document.getElementsByClassName('audio_left')[0].clientWidth
+
+            const COUNT = 13 // 线条总数
+            const LINE_WIDTH = 2 // 线条粗细
+            var lineArray = [
+                {speed: 1, height: 5},
+                {speed: 1, height: 10},
+                {speed: 1, height: 15},
+                {speed: 1, height: 20},
+                {speed: 1, height: 15},
+                {speed: 1, height: 10},
+                {speed: 1, height: 5},
+                {speed: 1, height: 10},
+                {speed: 1, height: 15},
+                {speed: 1, height: 20},
+                {speed: 1, height: 15},
+                {speed: 1, height: 10},
+                {speed: 1, height: 5},
+            ] // 定义线条初始高度和初始速度
+            var speed = 1 // 定义速度
+
+            // s设置画布大小
+            lines.height = LINES_HEIGHT
+            lines.width = LINES_WIDTH
+            trumpet.height = TRUMPET_HEIGHT
+            trumpet.width = TRUMPET_WIDTH
+
+            // 喇叭初始数据
+            var circleArr = {
+                x: 15,
+                y: 20,
+                sAngle: -0.3,
+                eAngle: 0.3,
+                raduis: [2, 6, 12],
+                lineWidth: 2
+            }
+
+            /**   ...................................这是一条分割线---(下面是操作).........................................................  */
+
+            // 初始化
+            AUDIO.renderTrumpet({
+                el: trumpet,
+                color: '#fff',
+                circles: circleArr
+            })
+
+            lineArray = AUDIO.fill_location({ // 初始化数据
+                boxWidth: LINES_WIDTH,
+                boxHeight: LINES_HEIGHT,
+                count: COUNT,
+                lineWidth: LINE_WIDTH,
+                lineArray,
+            })
+
+            AUDIO.renderLine({ // 渲染声浪
+                el: lines,
+                lineArray: lineArray,
+                color: '#fff',
+                lineWidth: LINE_WIDTH
+            })
+
+
+            if (audio != null) { // 进入页面获取音频总时长
+                audio.load();
+                audio.oncanplay = function () {
+                    // duration.innerHTML = AUDIO.formaTime(audio.duration)
+                }
+            }
+
+            playBtn.addEventListener('click', function () {
+                if (audio.paused) {
+                    audio.play()
+                } else {
+                    audio.pause()
+                    clearInterval(timer)
+                }
+            })
+
+            audio.addEventListener('play', function () { // 开始播放
+
+                timer = setInterval(function () {
+
+                    lineArray = AUDIO.action({
+                        lineArray,
+                    })
+
+                    lineArray = AUDIO.fill_location({ // 初始化数据
+                        boxWidth: LINES_WIDTH,
+                        boxHeight: LINES_HEIGHT,
+                        count: COUNT,
+                        lineWidth: LINE_WIDTH,
+                        lineArray,
+                    })
+
+                    AUDIO.renderLine({ // 渲染声浪
+                        el: lines,
+                        lineArray: lineArray,
+                        color: '#fff',
+                        lineWidth: LINE_WIDTH
+                    })
+                }, 100)
+            })
+
+            audio.addEventListener('timeupdate', function () {
+
+                curtime.innerHTML = AUDIO.formaTime(audio.currentTime)
+
+            })
+
+            audio.addEventListener('pause', function () {
+                clearInterval(timer)
+            })
+
+        }
+    </script>
+</body>
+
+</html>
